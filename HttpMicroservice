@@ -1,0 +1,79 @@
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import spark.Request;
+import spark.Response;
+import spark.Route;
+import spark.Spark;
+
+public class HttpMicroservice {
+
+    public static void main(String[] args) {
+        Spark.port(8008);
+        Spark.get("/numbers", new NumbersRoute());
+    }
+
+    private static class NumbersRoute implements Route {
+        @Override
+        public Object handle(Request request, Response response) throws Exception {
+            response.type("application/json");
+
+            List<Integer> allNumbers = new ArrayList<>();
+            String[] urls = request.queryParamsValues("url");
+
+            if (urls != null) {
+                for (String url : urls) {
+                    try {
+                        JSONArray numbersArray = fetchNumbersFromURL(url);
+                        if (numbersArray != null) {
+                            for (int i = 0; i < numbersArray.length(); i++) {
+                                allNumbers.add(numbersArray.getInt(i));
+                            }
+                        }
+                    } catch (IOException | JSONException e) {
+                        // Handle exception if needed
+                        e.printStackTrace();
+                    }
+                }
+            }
+
+            JSONObject responseJSON = new JSONObject();
+            responseJSON.put("numbers", allNumbers);
+
+            return responseJSON.toString();
+        }
+    }
+
+    private static JSONArray fetchNumbersFromURL(String urlString) throws IOException, JSONException {
+        URL url = new URL(urlString);
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setRequestMethod("GET");
+
+        int responseCode = connection.getResponseCode();
+        if (responseCode == HttpURLConnection.HTTP_OK) {
+            BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()));
+            String inputLine;
+            StringBuilder response = new StringBuilder();
+
+            while ((inputLine = in.readLine()) != null) {
+                response.append(inputLine);
+            }
+            in.close();
+
+            JSONObject jsonResponse = new JSONObject(response.toString());
+            return jsonResponse.getJSONArray("numbers");
+        }
+
+        return null;
+    }
+}
